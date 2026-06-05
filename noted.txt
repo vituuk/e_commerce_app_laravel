@@ -1,0 +1,9 @@
+- user register (POST http://localhost:8000/api/register)
+
+- admin register (POST http://localhost:8000/api/admin/users)
+
+- admin login (http://localhost:8000/api/login)
+
+- user login (POST http://localhost:8000/api/login)
+
+- logout (POST http://localhost:8000/api/logout)
