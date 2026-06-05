@@ -1,0 +1,64 @@
+services:
+  - type: web
+    name: e-commerce-api
+    env: php
+    region: singapore # Change to your nearest: oregon, frankfurt, singapore, ohio
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "php artisan serve --host=0.0.0.0 --port=$PORT"
+    envVars:
+      - key: APP_NAME
+        value: Laravel
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        generateValue: true  # Render auto-generates this
+      - key: APP_URL
+        value: https://e-commerce-api.onrender.com  # Will be updated after deploy
+
+      # Database — fill these from your Render Postgres dashboard
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: e-commerce-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: e-commerce-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: e-commerce-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: e-commerce-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: e-commerce-db
+          property: password
+
+      # Session & Cache
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+
+      # Logging
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: error
+
+databases:
+  - name: e-commerce-db
+    databaseName: e_commerce_v1
+    user: postgres
+    region: singapore # Match same region as web service
+    plan: free
