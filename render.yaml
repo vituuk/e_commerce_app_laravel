@@ -50,9 +50,9 @@ services:
 
       # Session & Cache
       - key: SESSION_DRIVER
-        value: database
+        value: cookie
       - key: CACHE_STORE
-        value: database
+        value: file
       - key: QUEUE_CONNECTION
         value: database
 
