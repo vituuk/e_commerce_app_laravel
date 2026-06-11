@@ -24,29 +24,22 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
 
-      # Database — fill these from your Render Postgres dashboard
+      # Database — set these manually in Render Dashboard from your Postgres service page
+      # Use the EXTERNAL hostname (not the internal short name)
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        fromDatabase:
-          name: e-commerce-db
-          property: host
+        sync: false   # Set to: dpg-d8h3eid8nd3s73bpnbsg-a.singapore-postgres.render.com
       - key: DB_PORT
-        fromDatabase:
-          name: e-commerce-db
-          property: port
+        value: "5432"
       - key: DB_DATABASE
-        fromDatabase:
-          name: e-commerce-db
-          property: database
+        sync: false   # Set to: e_commerce_mobile_v1
       - key: DB_USERNAME
-        fromDatabase:
-          name: e-commerce-db
-          property: user
+        sync: false   # Set to: e_commerce_mobile_v1_user
       - key: DB_PASSWORD
-        fromDatabase:
-          name: e-commerce-db
-          property: password
+        sync: false   # Set from your Render Postgres dashboard
+      - key: DB_SSLMODE
+        value: require
 
       # Session & Cache
       - key: SESSION_DRIVER
@@ -62,9 +55,4 @@ services:
       - key: LOG_LEVEL
         value: error
 
-databases:
-  - name: e-commerce-db
-    databaseName: e_commerce_v1
-    user: postgres
-    region: singapore # Match same region as web service
-    plan: free
+
