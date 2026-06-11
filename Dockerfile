@@ -3,6 +3,10 @@ FROM richarvey/nginx-php-fpm:3.1.6
 # Set working directory
 WORKDIR /var/www/html
 
+# Install PostgreSQL PHP extensions
+RUN apk add --no-cache postgresql-dev \
+    && docker-php-ext-install pdo_pgsql pgsql
+
 # Copy project files
 COPY . .
 
@@ -12,6 +16,7 @@ ENV WEBROOT /var/www/html/public
 ENV PHP_ERRORS_STDERR 1
 ENV RUN_SCRIPTS 1
 ENV REAL_IP_HEADER 1
+ENV PHP_CATCHALL 1
 
 # Laravel configuration defaults
 ENV APP_ENV production
