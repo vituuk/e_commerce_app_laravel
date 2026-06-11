@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\UploadController;
 
 // ─── Public routes ───────────────────────────────────────
 Route::post('/register', [AuthController::class, 'register']);
@@ -20,6 +21,7 @@ Route::get('/categories/{id}', [CategoryController::class, 'show']);
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
+ 
 
 // ─── Protected (any authenticated user) ──────────────────
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -28,6 +30,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/upload', [UploadController::class, 'upload']);
 
     // Favorites
     Route::get('/favorites', [FavoriteController::class, 'index']);

@@ -15,6 +15,8 @@ services:
         generateValue: true  # Render auto-generates this
       - key: APP_URL
         value: https://e-commerce-api.onrender.com  # Will be updated after deploy
+      - key: CLOUDINARY_URL
+        sync: false
 
       # Database — fill these from your Render Postgres dashboard
       - key: DB_CONNECTION
