@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
@@ -10,6 +11,36 @@ use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\UploadController;
+
+Route::get('/diagnose', function () {
+    $results = [];
+    try {
+        $results['config'] = [
+            'DB_CONNECTION' => config('database.default'),
+            'DB_HOST' => config('database.connections.pgsql.host'),
+            'DB_DATABASE' => config('database.connections.pgsql.database'),
+            'DB_USERNAME' => config('database.connections.pgsql.username'),
+            'SESSION_DRIVER' => config('session.driver'),
+        ];
+        
+        $pdo = DB::connection()->getPdo();
+        $results['db_connection'] = 'SUCCESS';
+        
+        $tables = DB::select("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
+        $tableList = array_map(function($t) { return $t->table_name; }, $tables);
+        $results['tables'] = $tableList;
+        
+        if (in_array('products', $tableList)) {
+            $results['products_count'] = DB::table('products')->count();
+        } else {
+            $results['products_count'] = 'N/A (table products does not exist)';
+        }
+    } catch (\Exception $e) {
+        $results['db_connection'] = 'FAILED';
+        $results['error'] = $e->getMessage();
+    }
+    return response()->json($results, 200, [], JSON_PRETTY_PRINT);
+});
 
 // ─── Public routes ───────────────────────────────────────
 Route::post('/register', [AuthController::class, 'register']);
