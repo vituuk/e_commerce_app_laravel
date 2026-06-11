@@ -12,7 +12,7 @@ php artisan view:cache
 
 # Run database migrations
 echo "Running database migrations..."
-php artisan migrate --force
+php artisan migrate --force || echo "Database migration failed. Continuing deployment..."
 
 # Seed database if there are no products
 echo "Checking if database needs seeding..."
