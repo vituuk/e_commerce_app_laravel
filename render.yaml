@@ -17,6 +17,12 @@ services:
         value: https://e-commerce-api.onrender.com  # Will be updated after deploy
       - key: CLOUDINARY_URL
         sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
 
       # Database — fill these from your Render Postgres dashboard
       - key: DB_CONNECTION
