@@ -1,11 +1,9 @@
 services:
   - type: web
     name: e-commerce-api
-    env: php
-    region: singapore # Change to your nearest: oregon, frankfurt, singapore, ohio
+    runtime: docker
+    region: singapore
     plan: free
-    buildCommand: "./build.sh"
-    startCommand: "php artisan serve --host=0.0.0.0 --port=$PORT"
     envVars:
       - key: APP_NAME
         value: Laravel
