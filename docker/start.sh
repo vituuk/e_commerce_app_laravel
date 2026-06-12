@@ -41,12 +41,12 @@ if php artisan migrate --force; then
     echo "[start.sh] Migrations completed."
 
     # Seed only if no products exist
-    PRODUCT_COUNT=$(php artisan tinker --execute="try { echo App\Models\Product::count(); } catch (\Exception \$e) { echo -1; }" 2>/dev/null | tail -1)
+    PRODUCT_COUNT=$(php -r "require 'vendor/autoload.php'; \$app = require_once 'bootstrap/app.php'; \$app->make('Illuminate\Contracts\Console\Kernel')->bootstrap(); try { echo App\Models\Product::count(); } catch (Exception \$e) { echo -1; }")
     if [ "$PRODUCT_COUNT" = "0" ]; then
         echo "[start.sh] Database is empty – seeding..."
         php artisan db:seed --force || echo "WARNING: Seeding failed – continuing"
     else
-        echo "[start.sh] Database already has data (count=$PRODUCT_COUNT). Skipping seed."
+        echo "[start.sh] Database count is $PRODUCT_COUNT. Skipping seed."
     fi
 else
     echo "WARNING: Migrations failed. App will start but DB features may not work."
