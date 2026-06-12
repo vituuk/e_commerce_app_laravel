@@ -3,20 +3,20 @@ set -e
 
 echo "=== Starting Laravel E-Commerce API ==="
 
-# ── 1. Generate APP_KEY if not set ──────────────────────────────────────────
-if [ -z "$APP_KEY" ]; then
-    echo "[start.sh] APP_KEY not set – generating..."
-    php artisan key:generate --force
-else
-    echo "[start.sh] APP_KEY is set."
-fi
-
-# ── 2. Create a minimal .env so artisan doesn't complain ────────────────────
+# ── 1. Create a minimal .env so artisan doesn't complain ────────────────────
 # On Render, all config comes from env vars injected at runtime.
 # We only need a stub .env so Laravel bootstraps correctly.
 if [ ! -f /var/www/html/.env ]; then
     echo "[start.sh] No .env found – creating stub from environment..."
     touch /var/www/html/.env
+fi
+
+# ── 2. Generate APP_KEY if not set ──────────────────────────────────────────
+if [ -z "$APP_KEY" ]; then
+    echo "[start.sh] APP_KEY not set – generating..."
+    php artisan key:generate --force
+else
+    echo "[start.sh] APP_KEY is set."
 fi
 
 # ── 3. Clear stale cache from build time ────────────────────────────────────
