@@ -1,38 +1,58 @@
-FROM richarvey/nginx-php-fpm:3.1.6
+FROM php:8.2-fpm-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    nginx \
+    postgresql-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    curl \
+    bash \
+    oniguruma-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        pdo \
+        pdo_pgsql \
+        pgsql \
+        mbstring \
+        exif \
+        pcntl \
+        bcmath \
+        gd \
+        zip \
+        opcache
+
+# Install Composer
+COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Install PostgreSQL PHP extensions
-RUN apk add --no-cache postgresql-dev \
-    && docker-php-ext-install pdo_pgsql pgsql
-
 # Copy project files
 COPY . .
 
-# Image configuration for richarvey/nginx-php-fpm
-ENV SKIP_COMPOSER 1
-ENV WEBROOT /var/www/html/public
-ENV PHP_ERRORS_STDERR 1
-ENV RUN_SCRIPTS 1
-ENV REAL_IP_HEADER 1
-ENV PHP_CATCHALL 1
-
-# Laravel configuration defaults
-ENV APP_ENV production
-ENV APP_DEBUG false
-ENV LOG_CHANNEL stderr
-ENV SESSION_DRIVER cookie
-ENV CACHE_STORE file
-
 # Allow Composer to run as root
-ENV COMPOSER_ALLOW_SUPERUSER 1
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Install Composer dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Install PHP dependencies (no dev, optimized autoloader)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# Expose port (Render automatically maps this, but standardizing on port 80/8080 or exposing is good practice)
-EXPOSE 80
+# Set correct permissions on storage and bootstrap/cache
+RUN mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
 
-# The default start command in the base image is /start.sh, which handles Nginx and PHP-FPM
+# Copy nginx config
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+
+# Copy startup script
+COPY docker/start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 8080
+
 CMD ["/start.sh"]

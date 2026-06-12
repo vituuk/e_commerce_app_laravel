@@ -1,10 +1,32 @@
-/node_modules
-/public/hot
-/public/storage
-/vendor
+# Version control
 .git
+.gitignore
+.gitattributes
+
+# Environment files (secrets must NOT be in the image)
 .env
-.env.backup
-.env.production
-.idea
+.env.*
+!.env.example
+
+# Dev tools
+.editorconfig
 .vscode
+.idea
+
+# Node / frontend build artifacts not needed in Docker
+node_modules
+/public/hot
+
+# Storage symlink (will be created at runtime)
+/public/storage
+
+# Vendor (installed by composer in Docker)
+/vendor
+
+# Tests
+tests/
+phpunit.xml
+
+# OS
+.DS_Store
+Thumbs.db

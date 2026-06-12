@@ -4,55 +4,56 @@ services:
     runtime: docker
     region: singapore
     plan: free
+    dockerfilePath: ./Dockerfile
     envVars:
+      # ── App ──────────────────────────────────────────────────────────────
       - key: APP_NAME
         value: Laravel
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
-        value: false
+        value: "false"
       - key: APP_KEY
-        generateValue: true  # Render auto-generates this
+        sync: false         # ← Paste your base64:... key from .env here in the Render dashboard
       - key: APP_URL
-        value: https://e-commerce-api.onrender.com  # Will be updated after deploy
-      - key: CLOUDINARY_URL
-        sync: false
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
+        sync: false         # ← Paste your Render service URL e.g. https://e-commerce-api.onrender.com
 
-      # Database — set these manually in Render Dashboard from your Postgres service page
-      # Use the EXTERNAL hostname (not the internal short name)
+      # ── Database (PostgreSQL on Render) ──────────────────────────────────
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        sync: false   # Set to: dpg-d8h3eid8nd3s73bpnbsg-a.singapore-postgres.render.com
+        sync: false         # ← dpg-d8h3eid8nd3s73bpnbsg-a.singapore-postgres.render.com
       - key: DB_PORT
         value: "5432"
       - key: DB_DATABASE
-        sync: false   # Set to: e_commerce_mobile_v1
+        sync: false         # ← e_commerce_mobile_v1
       - key: DB_USERNAME
-        sync: false   # Set to: e_commerce_mobile_v1_user
+        sync: false         # ← e_commerce_mobile_v1_user
       - key: DB_PASSWORD
-        sync: false   # Set from your Render Postgres dashboard
+        sync: false         # ← your Render Postgres password
       - key: DB_SSLMODE
         value: require
 
-      # Session & Cache
+      # ── Cloudinary ───────────────────────────────────────────────────────
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false         # ← dkjdboxve
+      - key: CLOUDINARY_API_KEY
+        sync: false         # ← 986233195126455
+      - key: CLOUDINARY_API_SECRET
+        sync: false         # ← your Cloudinary API secret
+
+      # ── Session / Cache / Queue ───────────────────────────────────────────
       - key: SESSION_DRIVER
         value: cookie
       - key: CACHE_STORE
         value: file
       - key: QUEUE_CONNECTION
         value: database
+      - key: FILESYSTEM_DISK
+        value: local
 
-      # Logging
+      # ── Logging ───────────────────────────────────────────────────────────
       - key: LOG_CHANNEL
         value: stderr
       - key: LOG_LEVEL
         value: error
-
-
