@@ -21,6 +21,8 @@ class UploadController extends Controller
             $filePath = $request->file('image')->getRealPath();
             $options = [
                 'folder' => 'e-commerce-products',
+                'use_filename' => true,
+                'unique_filename' => true,
             ];
 
             // Defensive version checking to support both v2.x and v3.x of cloudinary-laravel package
