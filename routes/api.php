@@ -42,6 +42,53 @@ Route::get('/diagnose', function () {
     return response()->json($results, 200, [], JSON_PRETTY_PRINT);
 });
 
+Route::get('/diagnose-cloudinary', function () {
+    $results = [
+        'cloudinary_cloud_name' => config('cloudinary.cloud_url') ? 'SET' : 'NOT SET',
+        'env_CLOUDINARY_CLOUD_NAME' => env('CLOUDINARY_CLOUD_NAME') ?? 'NOT SET',
+        'env_CLOUDINARY_API_KEY'    => env('CLOUDINARY_API_KEY') ? substr(env('CLOUDINARY_API_KEY'), 0, 6) . '...' : 'NOT SET',
+        'env_CLOUDINARY_API_SECRET' => env('CLOUDINARY_API_SECRET') ? substr(env('CLOUDINARY_API_SECRET'), 0, 6) . '...' : 'NOT SET',
+        'env_CLOUDINARY_URL'        => env('CLOUDINARY_URL') ? 'SET' : 'NOT SET',
+    ];
+
+    try {
+        // Try to actually connect to Cloudinary with a small test upload
+        $testImagePath = tempnam(sys_get_temp_dir(), 'test');
+        // Create a 1x1 pixel PNG
+        $img = imagecreatetruecolor(1, 1);
+        imagepng($img, $testImagePath);
+        imagedestroy($img);
+
+        $cloudinary = new \Cloudinary\Cloudinary([
+            'cloud' => [
+                'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+                'api_key'    => env('CLOUDINARY_API_KEY'),
+                'api_secret' => env('CLOUDINARY_API_SECRET'),
+            ],
+        ]);
+
+        $uploadApi = $cloudinary->uploadApi();
+        $result = $uploadApi->upload($testImagePath, [
+            'folder' => 'e-commerce-products-test',
+            'public_id' => 'connection-test',
+            'overwrite' => true,
+        ]);
+
+        unlink($testImagePath);
+        $results['cloudinary_status'] = 'SUCCESS';
+        $results['test_url'] = $result['secure_url'];
+
+        // Clean up test image
+        $cloudinary->adminApi()->deleteAssets(['e-commerce-products-test/connection-test']);
+
+    } catch (\Exception $e) {
+        $results['cloudinary_status'] = 'FAILED';
+        $results['cloudinary_error'] = $e->getMessage();
+    }
+
+    return response()->json($results, 200, [], JSON_PRETTY_PRINT);
+});
+
 // ─── Public routes ───────────────────────────────────────
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
