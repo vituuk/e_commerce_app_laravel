@@ -49,7 +49,7 @@ class ProductController extends Controller
 
         $product = Product::create([
             'title' => $request->title,
-            'slug' => Str::slug($request->title),
+            'slug' => $this->generateUniqueSlug($request->title),
             'price' => $request->price,
             'description' => $request->description,
             'category_id' => $request->category_id,
@@ -86,7 +86,7 @@ class ProductController extends Controller
 
         $data = $request->only(['title', 'price', 'description', 'category_id', 'images']);
         if (isset($data['title'])) {
-            $data['slug'] = Str::slug($data['title']);
+            $data['slug'] = $this->generateUniqueSlug($data['title'], $id);
         }
 
         $product->update($data);
@@ -126,7 +126,9 @@ class ProductController extends Controller
         foreach ($request->products as $productData) {
             // Auto-generate slug if not provided
             if (!isset($productData['slug'])) {
-                $productData['slug'] = Str::slug($productData['title']);
+                $productData['slug'] = $this->generateUniqueSlug($productData['title']);
+            } else {
+                $productData['slug'] = $this->generateUniqueSlug($productData['slug']);
             }
 
             $product = Product::create($productData);
@@ -138,5 +140,31 @@ class ProductController extends Controller
             'count' => count($createdProducts),
             'products' => $createdProducts
         ], 201);
+    }
+
+    /**
+     * Generate a unique slug for products.
+     */
+    private function generateUniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $slug = Str::slug($title);
+        $originalSlug = $slug;
+        $count = 1;
+
+        $query = Product::where('slug', $slug);
+        if ($ignoreId) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        while ($query->exists()) {
+            $slug = $originalSlug . '-' . $count;
+            $query = Product::where('slug', $slug);
+            if ($ignoreId) {
+                $query->where('id', '!=', $ignoreId);
+            }
+            $count++;
+        }
+
+        return $slug;
     }
 }
