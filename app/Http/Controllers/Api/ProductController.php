@@ -7,6 +7,7 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductController extends Controller
@@ -193,7 +194,10 @@ class ProductController extends Controller
                         continue;
                     }
                 } catch (\Exception $e) {
-                    // Fallback to original URL on failure
+                    Log::error('Cloudinary automatic upload failed: ' . $e->getMessage(), [
+                        'image_url' => $imageUrl,
+                        'exception' => $e
+                    ]);
                 }
             }
             $uploadedImages[] = $imageUrl;
