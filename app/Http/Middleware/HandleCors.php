@@ -11,6 +11,7 @@ class HandleCors
      * Allowed origins — add your Vercel URL and any other frontend domains here.
      */
     private array $allowedOrigins = [
+        'https://e-commerce-app-laravel-2.onrender.com',
         'https://e-commerce-app-flutter.vercel.app',
         'https://e-commerce-app-flutter-git-main-ukvitu9999-7456s-projects.vercel.app',
         'http://localhost:3000',
@@ -22,10 +23,10 @@ class HandleCors
     {
         $origin = $request->header('Origin');
 
-        // Allow request if origin matches or is a Vercel preview URL
+        // Allow request if origin matches, is a Vercel preview URL, or is a local/private network address (with or without port)
         $allowed = in_array($origin, $this->allowedOrigins)
             || str_ends_with((string) $origin, '.vercel.app')
-            || str_ends_with((string) $origin, 'localhost');
+            || preg_match('/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/', (string) $origin);
 
         if ($request->isMethod('OPTIONS')) {
             // Pre-flight response
