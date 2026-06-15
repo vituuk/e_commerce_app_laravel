@@ -94,12 +94,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::post('/admin/users', [AuthController::class, 'createAdmin']);
 
-    Route::get('/categories', [CategoryController::class, 'index']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::put('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
-    Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::post('/products/bulk', [ProductController::class, 'bulkStore']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
