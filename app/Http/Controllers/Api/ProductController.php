@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductController extends Controller
 {
@@ -47,13 +49,15 @@ class ProductController extends Controller
             'images.*' => 'string',
         ]);
 
+        $uploadedImages = $this->uploadExternalImages($request->images);
+
         $product = Product::create([
             'title' => $request->title,
             'slug' => $this->generateUniqueSlug($request->title),
             'price' => $request->price,
             'description' => $request->description,
             'category_id' => $request->category_id,
-            'images' => $request->images,
+            'images' => $uploadedImages,
         ]);
 
         return response()->json($product->load('category'), 201);
@@ -87,6 +91,9 @@ class ProductController extends Controller
         $data = $request->only(['title', 'price', 'description', 'category_id', 'images']);
         if (isset($data['title'])) {
             $data['slug'] = $this->generateUniqueSlug($data['title'], $id);
+        }
+        if (isset($data['images'])) {
+            $data['images'] = $this->uploadExternalImages($data['images']);
         }
 
         $product->update($data);
@@ -131,6 +138,10 @@ class ProductController extends Controller
                 $productData['slug'] = $this->generateUniqueSlug($productData['slug']);
             }
 
+            if (isset($productData['images'])) {
+                $productData['images'] = $this->uploadExternalImages($productData['images']);
+            }
+
             $product = Product::create($productData);
             $createdProducts[] = $product->load('category');
         }
@@ -140,6 +151,54 @@ class ProductController extends Controller
             'count' => count($createdProducts),
             'products' => $createdProducts
         ], 201);
+    }
+
+    /**
+     * Download external images and upload them to Cloudinary.
+     */
+    private function uploadExternalImages(array $images): array
+    {
+        $uploadedImages = [];
+        foreach ($images as $imageUrl) {
+            // If the image is already a Cloudinary URL, keep it
+            if (str_contains($imageUrl, 'res.cloudinary.com')) {
+                $uploadedImages[] = $imageUrl;
+                continue;
+            }
+
+            // Check if it is a valid external HTTP/HTTPS URL
+            if (filter_var($imageUrl, FILTER_VALIDATE_URL)) {
+                try {
+                    $response = Http::get($imageUrl);
+                    if ($response->successful()) {
+                        $tempFile = tempnam(sys_get_temp_dir(), 'img');
+                        file_put_contents($tempFile, $response->body());
+
+                        $options = [
+                            'folder' => 'e-commerce-products',
+                            'use_filename' => true,
+                            'unique_filename' => true,
+                        ];
+
+                        if (method_exists(Cloudinary::class, 'uploadApi')) {
+                            $result = Cloudinary::uploadApi()->upload($tempFile, $options);
+                            $url = $result['secure_url'];
+                        } else {
+                            $result = Cloudinary::upload($tempFile, $options);
+                            $url = $result->getSecurePath();
+                        }
+
+                        unlink($tempFile);
+                        $uploadedImages[] = $url;
+                        continue;
+                    }
+                } catch (\Exception $e) {
+                    // Fallback to original URL on failure
+                }
+            }
+            $uploadedImages[] = $imageUrl;
+        }
+        return $uploadedImages;
     }
 
     /**
