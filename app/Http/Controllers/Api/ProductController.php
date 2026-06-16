@@ -41,16 +41,44 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+        // Normalize single image file or URL string to array
+        if ($request->files->has('images') && !is_array($request->files->get('images'))) {
+            $request->files->set('images', [$request->files->get('images')]);
+        } elseif ($request->has('images') && !is_array($request->input('images'))) {
+            $request->merge([
+                'images' => [$request->input('images')]
+            ]);
+        }
+
         $request->validate([
             'title' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
             'description' => 'required|string',
             'category_id' => 'required|exists:categories,id',
             'images' => 'required|array',
-            'images.*' => 'string',
+            'images.*' => [
+                'required',
+                function ($attribute, $value, $fail) {
+                    if ($value instanceof \Illuminate\Http\UploadedFile) {
+                        $validator = \Illuminate\Support\Facades\Validator::make(
+                            ['file' => $value],
+                            ['file' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240']
+                        );
+                        if ($validator->fails()) {
+                            $fail("The $attribute must be a valid image file (jpeg, png, jpg, gif, webp) under 10MB.");
+                        }
+                    } elseif (is_string($value)) {
+                        if (!filter_var($value, FILTER_VALIDATE_URL) && !str_starts_with($value, 'http')) {
+                            $fail("The $attribute must be a valid URL string.");
+                        }
+                    } else {
+                        $fail("The $attribute must be either an image file or a valid URL string.");
+                    }
+                }
+            ],
         ]);
 
-        $uploadedImages = $this->uploadExternalImages($request->images);
+        $uploadedImages = $this->processProductImages($request->images);
 
         $product = Product::create([
             'title' => $request->title,
@@ -80,13 +108,41 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
 
+        // Normalize single image file or URL string to array
+        if ($request->files->has('images') && !is_array($request->files->get('images'))) {
+            $request->files->set('images', [$request->files->get('images')]);
+        } elseif ($request->has('images') && !is_array($request->input('images'))) {
+            $request->merge([
+                'images' => [$request->input('images')]
+            ]);
+        }
+
         $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'price' => 'sometimes|required|numeric|min:0',
             'description' => 'sometimes|required|string',
             'category_id' => 'sometimes|required|exists:categories,id',
             'images' => 'sometimes|required|array',
-            'images.*' => 'string',
+            'images.*' => [
+                'required',
+                function ($attribute, $value, $fail) {
+                    if ($value instanceof \Illuminate\Http\UploadedFile) {
+                        $validator = \Illuminate\Support\Facades\Validator::make(
+                            ['file' => $value],
+                            ['file' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240']
+                        );
+                        if ($validator->fails()) {
+                            $fail("The $attribute must be a valid image file (jpeg, png, jpg, gif, webp) under 10MB.");
+                        }
+                    } elseif (is_string($value)) {
+                        if (!filter_var($value, FILTER_VALIDATE_URL) && !str_starts_with($value, 'http')) {
+                            $fail("The $attribute must be a valid URL string.");
+                        }
+                    } else {
+                        $fail("The $attribute must be either an image file or a valid URL string.");
+                    }
+                }
+            ],
         ]);
 
         $data = $request->only(['title', 'price', 'description', 'category_id', 'images']);
@@ -94,7 +150,7 @@ class ProductController extends Controller
             $data['slug'] = $this->generateUniqueSlug($data['title'], $id);
         }
         if (isset($data['images'])) {
-            $data['images'] = $this->uploadExternalImages($data['images']);
+            $data['images'] = $this->processProductImages($data['images']);
         }
 
         $product->update($data);
@@ -140,7 +196,7 @@ class ProductController extends Controller
             }
 
             if (isset($productData['images'])) {
-                $productData['images'] = $this->uploadExternalImages($productData['images']);
+                $productData['images'] = $this->processProductImages($productData['images']);
             }
 
             $product = Product::create($productData);
@@ -155,26 +211,19 @@ class ProductController extends Controller
     }
 
     /**
-     * Download external images and upload them to Cloudinary.
+     * Process images: Upload files to Cloudinary, download external URLs and upload them,
+     * or keep existing Cloudinary URLs.
      */
-    private function uploadExternalImages(array $images): array
+    private function processProductImages(array $images): array
     {
         $uploadedImages = [];
-        foreach ($images as $imageUrl) {
-            // If the image is already a Cloudinary URL, keep it
-            if (str_contains($imageUrl, 'res.cloudinary.com')) {
-                $uploadedImages[] = $imageUrl;
-                continue;
-            }
+        $uploadDriver = env('UPLOAD_DRIVER', env('CLOUDINARY_API_KEY') ? 'cloudinary' : 'local');
 
-            // Check if it is a valid external HTTP/HTTPS URL
-            if (filter_var($imageUrl, FILTER_VALIDATE_URL)) {
+        foreach ($images as $image) {
+            if ($image instanceof \Illuminate\Http\UploadedFile) {
                 try {
-                    $response = Http::get($imageUrl);
-                    if ($response->successful()) {
-                        $tempFile = tempnam(sys_get_temp_dir(), 'img');
-                        file_put_contents($tempFile, $response->body());
-
+                    if ($uploadDriver === 'cloudinary') {
+                        $filePath = $image->getRealPath();
                         $options = [
                             'folder' => 'e-commerce-products',
                             'use_filename' => true,
@@ -182,25 +231,78 @@ class ProductController extends Controller
                         ];
 
                         if (method_exists(Cloudinary::class, 'uploadApi')) {
-                            $result = Cloudinary::uploadApi()->upload($tempFile, $options);
+                            $result = Cloudinary::uploadApi()->upload($filePath, $options);
                             $url = $result['secure_url'];
                         } else {
-                            $result = Cloudinary::upload($tempFile, $options);
-                            $url = $result->getSecurePath();
+                            $response = Cloudinary::upload($filePath, $options);
+                            $url = $response->getSecurePath();
                         }
-
-                        unlink($tempFile);
                         $uploadedImages[] = $url;
-                        continue;
+                    } else {
+                        // Local storage
+                        $path = \Illuminate\Support\Facades\Storage::disk('public')->putFile('products', $image);
+                        $uploadedImages[] = asset('storage/' . $path);
                     }
                 } catch (\Exception $e) {
-                    Log::error('Cloudinary automatic upload failed: ' . $e->getMessage(), [
-                        'image_url' => $imageUrl,
+                    Log::error('File upload failed: ' . $e->getMessage(), [
                         'exception' => $e
                     ]);
+                    throw new \RuntimeException('Failed to upload product image: ' . $e->getMessage());
                 }
+            } elseif (is_string($image)) {
+                // If the image is already a Cloudinary or local storage URL, keep it
+                if (str_contains($image, 'res.cloudinary.com') || 
+                    str_contains($image, '/storage/') || 
+                    str_contains($image, '/uploads/')) {
+                    $uploadedImages[] = $image;
+                    continue;
+                }
+
+                // If it is a valid external URL, download and upload/store it
+                if (filter_var($image, FILTER_VALIDATE_URL)) {
+                    try {
+                        $response = Http::get($image);
+                        if ($response->successful()) {
+                            if ($uploadDriver === 'cloudinary') {
+                                $tempFile = tempnam(sys_get_temp_dir(), 'img');
+                                file_put_contents($tempFile, $response->body());
+
+                                $options = [
+                                    'folder' => 'e-commerce-products',
+                                    'use_filename' => true,
+                                    'unique_filename' => true,
+                                ];
+
+                                if (method_exists(Cloudinary::class, 'uploadApi')) {
+                                    $result = Cloudinary::uploadApi()->upload($tempFile, $options);
+                                    $url = $result['secure_url'];
+                                } else {
+                                    $result = Cloudinary::upload($tempFile, $options);
+                                    $url = $result->getSecurePath();
+                                }
+
+                                unlink($tempFile);
+                                $uploadedImages[] = $url;
+                                continue;
+                            } else {
+                                // Local storage for external URL
+                                $extension = pathinfo(parse_url($image, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
+                                $filename = Str::random(40) . '.' . $extension;
+                                $path = 'products/' . $filename;
+                                \Illuminate\Support\Facades\Storage::disk('public')->put($path, $response->body());
+                                $uploadedImages[] = asset('storage/' . $path);
+                                continue;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Automatic external URL upload failed: ' . $e->getMessage(), [
+                            'image_url' => $image,
+                            'exception' => $e
+                        ]);
+                    }
+                }
+                $uploadedImages[] = $image;
             }
-            $uploadedImages[] = $imageUrl;
         }
         return $uploadedImages;
     }

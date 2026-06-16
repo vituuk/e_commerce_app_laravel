@@ -18,29 +18,39 @@ class UploadController extends Controller
         ]);
 
         try {
-            $filePath = $request->file('image')->getRealPath();
-            $options = [
-                'folder' => 'e-commerce-products',
-                'use_filename' => true,
-                'unique_filename' => true,
-            ];
+            $image = $request->file('image');
+            $uploadDriver = env('UPLOAD_DRIVER', env('CLOUDINARY_API_KEY') ? 'cloudinary' : 'local');
 
-            // Defensive version checking to support both v2.x and v3.x of cloudinary-laravel package
-            if (method_exists(Cloudinary::class, 'uploadApi')) {
-                // v3.x API
-                $result = Cloudinary::uploadApi()->upload($filePath, $options);
-                $url = $result['secure_url'];
-                $publicId = $result['public_id'];
+            if ($uploadDriver === 'cloudinary') {
+                $filePath = $image->getRealPath();
+                $options = [
+                    'folder' => 'e-commerce-products',
+                    'use_filename' => true,
+                    'unique_filename' => true,
+                ];
+
+                // Defensive version checking to support both v2.x and v3.x of cloudinary-laravel package
+                if (method_exists(Cloudinary::class, 'uploadApi')) {
+                    // v3.x API
+                    $result = Cloudinary::uploadApi()->upload($filePath, $options);
+                    $url = $result['secure_url'];
+                    $publicId = $result['public_id'];
+                } else {
+                    // v2.x API
+                    $response = Cloudinary::upload($filePath, $options);
+                    $url = $response->getSecurePath();
+                    $publicId = $response->getPublicId();
+                }
             } else {
-                // v2.x API
-                $response = Cloudinary::upload($filePath, $options);
-                $url = $response->getSecurePath();
-                $publicId = $response->getPublicId();
+                // Local storage
+                $path = \Illuminate\Support\Facades\Storage::disk('public')->putFile('uploads', $image);
+                $url = asset('storage/' . $path);
+                $publicId = basename($path);
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Image uploaded successfully',
+                'message' => 'Image uploaded successfully' . ($uploadDriver === 'local' ? ' to local storage' : ''),
                 'url' => $url,
                 'public_id' => $publicId,
             ], 200);
