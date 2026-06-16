@@ -142,11 +142,13 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::post('/admin/users', [AuthController::class, 'createAdmin']);
 
     Route::post('/categories', [CategoryController::class, 'store']);
-    Route::match(['put', 'post'], '/categories/{id}', [CategoryController::class, 'update']);
+    Route::put('/categories/{id}', [CategoryController::class, 'update']);
+    Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
     Route::post('/products', [ProductController::class, 'store']);
     Route::post('/products/bulk', [ProductController::class, 'bulkStore']);
-    Route::match(['put', 'post'], '/products/{id}', [ProductController::class, 'update']);
+    Route::put('/products/{id}', [ProductController::class, 'update']);
+    Route::post('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 });
