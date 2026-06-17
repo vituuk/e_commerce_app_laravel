@@ -92,4 +92,127 @@ class AuthController extends Controller
             'user' => $user,
         ], 201);
     }
+
+    /**
+     * Redirect to Google
+     */
+    public function redirectToGoogle()
+    {
+        return response()->json([
+            'url' => \Laravel\Socialite\Facades\Socialite::driver('google')->stateless()->redirect()->getTargetUrl(),
+        ]);
+    }
+
+    /**
+     * Handle Google Callback
+     */
+    public function handleGoogleCallback(Request $request)
+    {
+        try {
+            $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')->stateless()->user();
+            
+            $user = User::where('email', $googleUser->getEmail())->first();
+
+            if ($user) {
+                $user->update([
+                    'google_id' => $googleUser->getId(),
+                    'name' => $user->name ?? $googleUser->getName() ?? 'Google User',
+                ]);
+            } else {
+                $user = User::create([
+                    'name' => $googleUser->getName() ?? 'Google User',
+                    'email' => $googleUser->getEmail(),
+                    'google_id' => $googleUser->getId(),
+                    'password' => Hash::make(\Illuminate\Support\Str::random(24)),
+                    'role' => 'user',
+                ]);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'user' => $user,
+                'token' => $token,
+                'token_type' => 'Bearer',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Authentication failed', 'message' => $e->getMessage()], 401);
+        }
+    }
+
+    /**
+     * Verify Google Token from Mobile App
+     */
+    public function verifyGoogleToken(Request $request)
+    {
+        $request->validate([
+            'id_token' => 'required|string',
+        ]);
+
+        try {
+            $idToken = $request->id_token;
+            
+            // Validate the ID token using Google TokenInfo API
+            $response = \Illuminate\Support\Facades\Http::get("https://oauth2.googleapis.com/tokeninfo", [
+                'id_token' => $idToken,
+            ]);
+
+            if ($response->failed()) {
+                // Fallback to checking as an access token via Socialite if HTTP request fails
+                try {
+                    $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')->userFromToken($idToken);
+                    $email = $googleUser->getEmail();
+                    $name = $googleUser->getName() ?? 'Google User';
+                    $googleId = $googleUser->getId();
+                } catch (\Exception $socialiteEx) {
+                    return response()->json([
+                        'error' => 'Token verification failed',
+                        'message' => 'Invalid ID token or Access token.'
+                    ], 401);
+                }
+            } else {
+                $payload = $response->json();
+                
+                // Verify the issuer is google
+                if (!in_array($payload['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'])) {
+                    return response()->json(['error' => 'Token verification failed', 'message' => 'Invalid issuer'], 401);
+                }
+                
+                $email = $payload['email'] ?? null;
+                $name = $payload['name'] ?? 'Google User';
+                $googleId = $payload['sub'] ?? null;
+                
+                if (!$email || !$googleId) {
+                    return response()->json(['error' => 'Token verification failed', 'message' => 'Missing email or sub in token'], 401);
+                }
+            }
+
+            $user = User::where('email', $email)->first();
+
+            if ($user) {
+                $user->update([
+                    'google_id' => $googleId,
+                    'name' => $user->name ?? $name,
+                ]);
+            } else {
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'google_id' => $googleId,
+                    'password' => Hash::make(\Illuminate\Support\Str::random(24)),
+                    'role' => 'user',
+                ]);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'user' => $user,
+                'token' => $token,
+                'token_type' => 'Bearer',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Token verification failed', 'message' => $e->getMessage()], 401);
+        }
+    }
 }

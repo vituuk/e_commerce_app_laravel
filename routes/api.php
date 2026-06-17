@@ -93,6 +93,11 @@ Route::get('/diagnose-cloudinary', function () {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+// ─── Google Auth ─────────────────────────────────────────
+Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
+Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+Route::post('/auth/google/verify', [AuthController::class, 'verifyGoogleToken']);
+
 // ─── Public: Categories & Products ───────────────────────
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
