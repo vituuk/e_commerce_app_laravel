@@ -216,8 +216,9 @@ class OrderController extends Controller
         ]);
 
         try {
-            // 4. POST to ABA PayWay purchase endpoint
+            // 4. POST to ABA PayWay purchase endpoint as form data (required — ABA does NOT accept JSON)
             $response = Http::timeout(15)
+                ->asForm()
                 ->post("{$baseUrl}/api/payment-gateway/v1/payments/purchase", $params);
 
             $statusCode = $response->status();
