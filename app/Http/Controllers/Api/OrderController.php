@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CartItem;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\CartItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -169,8 +172,8 @@ class OrderController extends Controller
         $firstName = $nameParts[0] ?? 'Customer';
         $lastName = $nameParts[1] ?? 'User';
 
-        $customer = \App\Models\Customer::where('user_id', $user->id)->first();
-        $phone = $customer->phone ?? '012345678';
+        $customer = Customer::where('user_id', $user->id)->first();
+        $phone = $customer?->phone ?? '012345678';
 
         // Prepare request parameters for PayWay
         $params = [
@@ -200,7 +203,7 @@ class OrderController extends Controller
 
         try {
             // 4. Send request using HTTP facade
-            $response = \Illuminate\Support\Facades\Http::post("{$baseUrl}/api/payment-gateway/v1/payments/generate-qr", $params);
+            $response = Http::post("{$baseUrl}/api/payment-gateway/v1/payments/generate-qr", $params);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -212,7 +215,7 @@ class OrderController extends Controller
                         'is_mock' => false,
                     ];
                 } else {
-                    \Illuminate\Support\Facades\Log::warning("PayWay error status: " . json_encode($data));
+                    Log::warning("PayWay error status: " . json_encode($data));
                     $message = $data['description'] ?? 'ABA PayWay returned an error.';
                 }
             } else {
@@ -223,7 +226,7 @@ class OrderController extends Controller
         }
 
         // Fallback to mock QR code in case PayWay whitelisting or credentials fail (local testing)
-        \Illuminate\Support\Facades\Log::warning("PayWay QR Generation Failed: " . $message . ". Falling back to mock QR for testing.");
+        Log::warning("PayWay QR Generation Failed: " . $message . ". Falling back to mock QR for testing.");
         
         return [
             'success' => true,
