@@ -85,9 +85,10 @@ class OrderController extends Controller
             if ($request->payment_method === 'khqr') {
                 $qrResult = $this->generatePayWayQR($order, $request->user());
                 $qrData = [
-                    'qr_string' => $qrResult['qr_string'],
+                    'qr_string'       => $qrResult['qr_string'],
                     'abapay_deeplink' => $qrResult['abapay_deeplink'],
-                    'is_mock' => $qrResult['is_mock'] ?? false,
+                    'is_mock'         => $qrResult['is_mock'] ?? false,
+                    'aba_error'       => $qrResult['aba_error'] ?? null,
                 ];
             }
 
@@ -264,6 +265,7 @@ class OrderController extends Controller
             'qr_string'       => $mockQr,
             'abapay_deeplink' => "aba://payway?type=payway&qrcode=" . urlencode($tranId),
             'is_mock'         => true,
+            'aba_error'       => $message ?? 'Unknown ABA PayWay error',
         ];
     }
 
