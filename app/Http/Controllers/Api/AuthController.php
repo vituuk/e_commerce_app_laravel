@@ -5,7 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
+use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -99,7 +105,7 @@ class AuthController extends Controller
     public function redirectToGoogle()
     {
         return response()->json([
-            'url' => \Laravel\Socialite\Facades\Socialite::driver('google')->stateless()->redirect()->getTargetUrl(),
+            'url' => Socialite::driver('google')->stateless()->redirect()->getTargetUrl(),
         ]);
     }
 
@@ -109,7 +115,7 @@ class AuthController extends Controller
     public function handleGoogleCallback(Request $request)
     {
         try {
-            $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')->stateless()->user();
             
             $user = User::where('email', $googleUser->getEmail())->first();
 
@@ -123,7 +129,7 @@ class AuthController extends Controller
                     'name' => $googleUser->getName() ?? 'Google User',
                     'email' => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
-                    'password' => Hash::make(\Illuminate\Support\Str::random(24)),
+                    'password' => Hash::make(Str::random(24)),
                     'role' => 'user',
                 ]);
             }
@@ -153,14 +159,14 @@ class AuthController extends Controller
             $idToken = $request->id_token;
             
             // Validate the ID token using Google TokenInfo API
-            $response = \Illuminate\Support\Facades\Http::get("https://oauth2.googleapis.com/tokeninfo", [
+            $response = Http::get("https://oauth2.googleapis.com/tokeninfo", [
                 'id_token' => $idToken,
             ]);
 
             if ($response->failed()) {
                 // Fallback to checking as an access token via Socialite if HTTP request fails
                 try {
-                    $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')->userFromToken($idToken);
+                    $googleUser = Socialite::driver('google')->userFromToken($idToken);
                     $email = $googleUser->getEmail();
                     $name = $googleUser->getName() ?? 'Google User';
                     $googleId = $googleUser->getId();
@@ -199,7 +205,7 @@ class AuthController extends Controller
                     'name' => $name,
                     'email' => $email,
                     'google_id' => $googleId,
-                    'password' => Hash::make(\Illuminate\Support\Str::random(24)),
+                    'password' => Hash::make(Str::random(24)),
                     'role' => 'user',
                 ]);
             }
@@ -232,7 +238,7 @@ class AuthController extends Controller
             $code = strval(mt_rand(100000, 999999));
 
             // Store token in database
-            \Illuminate\Support\Facades\DB::table('password_reset_tokens')->updateOrInsert(
+            DB::table('password_reset_tokens')->updateOrInsert(
                 ['email' => $email],
                 [
                     'token' => $code,
@@ -241,7 +247,7 @@ class AuthController extends Controller
             );
 
             // Send raw email (writes to laravel.log under MAIL_MAILER=log)
-            \Illuminate\Support\Facades\Mail::raw("Your password reset code is: {$code}. It will expire in 15 minutes.", function ($message) use ($email) {
+            Mail::raw("Your password reset code is: {$code}. It will expire in 15 minutes.", function ($message) use ($email) {
                 $message->to($email)
                         ->subject("Password Reset Verification Code");
             });
@@ -271,7 +277,7 @@ class AuthController extends Controller
         ]);
 
         try {
-            $record = \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+            $record = DB::table('password_reset_tokens')
                 ->where('email', $request->email)
                 ->first();
 
@@ -282,10 +288,10 @@ class AuthController extends Controller
             }
 
             // Check if code is expired (e.g. 15 minutes)
-            $createdAt = \Carbon\Carbon::parse($record->created_at);
+            $createdAt = Carbon::parse($record->created_at);
             if ($createdAt->addMinutes(15)->isPast()) {
                 // Delete expired record
-                \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+                DB::table('password_reset_tokens')
                     ->where('email', $request->email)
                     ->delete();
 
@@ -301,7 +307,7 @@ class AuthController extends Controller
             ]);
 
             // Delete token record
-            \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+            DB::table('password_reset_tokens')
                 ->where('email', $request->email)
                 ->delete();
 
