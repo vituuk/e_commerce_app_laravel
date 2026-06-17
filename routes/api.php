@@ -42,6 +42,55 @@ Route::get('/diagnose', function () {
     return response()->json($results, 200, [], JSON_PRETTY_PRINT);
 });
 
+Route::get('/diagnose-payway', function () {
+    $merchantId = config('services.payway.merchant_id');
+    $apiKey     = config('services.payway.api_key');
+    $baseUrl    = config('services.payway.base_url');
+    $appUrl     = rtrim(config('app.url'), '/');
+
+    $reqTime = now()->format('YmdHis');
+    $tranId  = 'TEST' . strtoupper(substr(md5(time()), 0, 10));
+    $amount  = '1.00';
+
+    $hashParams = [
+        'req_time'       => $reqTime,
+        'merchant_id'    => $merchantId,
+        'tran_id'        => $tranId,
+        'amount'         => $amount,
+        'payment_option' => 'abapay_khqr',
+        'first_name'     => 'Test',
+        'last_name'      => 'User',
+        'email'          => 'test@test.com',
+        'phone'          => '012345678',
+    ];
+    ksort($hashParams);
+    $b4hash = implode('', array_map('strval', array_values($hashParams)));
+    $hash   = base64_encode(hash_hmac('sha512', $b4hash, $apiKey, true));
+
+    $params = array_merge($hashParams, [
+        'return_url' => $appUrl . '/api/payments/payway-callback',
+        'hash'       => $hash,
+    ]);
+
+    try {
+        $response = \Illuminate\Support\Facades\Http::timeout(15)
+            ->asForm()
+            ->post("{$baseUrl}/api/payment-gateway/v1/payments/purchase", $params);
+
+        return response()->json([
+            'merchant_id'    => $merchantId,
+            'api_key_prefix' => substr($apiKey, 0, 8) . '...',
+            'base_url'       => $baseUrl,
+            'app_url'        => $appUrl,
+            'b4hash'         => $b4hash,
+            'http_status'    => $response->status(),
+            'aba_response'   => $response->json() ?? $response->body(),
+        ], 200, [], JSON_PRETTY_PRINT);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 Route::get('/diagnose-cloudinary', function () {
     $results = [
         'cloudinary_cloud_name' => config('cloudinary.cloud_url') ? 'SET' : 'NOT SET',
@@ -50,6 +99,7 @@ Route::get('/diagnose-cloudinary', function () {
         'env_CLOUDINARY_API_SECRET' => env('CLOUDINARY_API_SECRET') ? substr(env('CLOUDINARY_API_SECRET'), 0, 6) . '...' : 'NOT SET',
         'env_CLOUDINARY_URL'        => env('CLOUDINARY_URL') ? 'SET' : 'NOT SET',
     ];
+
 
     try {
         // Try to actually connect to Cloudinary with a small test upload
