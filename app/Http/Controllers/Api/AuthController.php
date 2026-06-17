@@ -215,4 +215,104 @@ class AuthController extends Controller
             return response()->json(['error' => 'Token verification failed', 'message' => $e->getMessage()], 401);
         }
     }
+
+    /**
+     * Send password reset code
+     */
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email',
+        ], [
+            'email.exists' => 'No user found with this email address.'
+        ]);
+
+        try {
+            $email = $request->email;
+            $code = strval(mt_rand(100000, 999999));
+
+            // Store token in database
+            \Illuminate\Support\Facades\DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $email],
+                [
+                    'token' => $code,
+                    'created_at' => now(),
+                ]
+            );
+
+            // Send raw email (writes to laravel.log under MAIL_MAILER=log)
+            \Illuminate\Support\Facades\Mail::raw("Your password reset code is: {$code}. It will expire in 15 minutes.", function ($message) use ($email) {
+                $message->to($email)
+                        ->subject("Password Reset Verification Code");
+            });
+
+            return response()->json([
+                'message' => 'A password reset code has been sent to your email.'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to send reset code. Please try again.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reset password using code
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email',
+            'code' => 'required|string|size:6',
+            'password' => 'required|string|min:5|confirmed',
+        ], [
+            'email.exists' => 'No user found with this email address.'
+        ]);
+
+        try {
+            $record = \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+                ->where('email', $request->email)
+                ->first();
+
+            if (!$record || $record->token !== $request->code) {
+                return response()->json([
+                    'message' => 'The verification code is invalid.'
+                ], 422);
+            }
+
+            // Check if code is expired (e.g. 15 minutes)
+            $createdAt = \Carbon\Carbon::parse($record->created_at);
+            if ($createdAt->addMinutes(15)->isPast()) {
+                // Delete expired record
+                \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+                    ->where('email', $request->email)
+                    ->delete();
+
+                return response()->json([
+                    'message' => 'The verification code has expired. Please request a new one.'
+                ], 422);
+            }
+
+            // Update user password
+            $user = User::where('email', $request->email)->first();
+            $user->update([
+                'password' => Hash::make($request->password)
+            ]);
+
+            // Delete token record
+            \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+                ->where('email', $request->email)
+                ->delete();
+
+            return response()->json([
+                'message' => 'Your password has been reset successfully.'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to reset password. Please try again.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

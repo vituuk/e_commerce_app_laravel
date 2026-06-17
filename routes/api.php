@@ -92,6 +92,8 @@ Route::get('/diagnose-cloudinary', function () {
 // ─── Public routes ───────────────────────────────────────
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
 // ─── Google Auth ─────────────────────────────────────────
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
