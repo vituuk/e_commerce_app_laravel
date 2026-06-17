@@ -179,41 +179,46 @@ class OrderController extends Controller
         $customer = Customer::where('user_id', $user->id)->first();
         $phone    = $customer?->phone ?? '012345678';
 
-        // Prepare request parameters for PayWay
-        // NOTE: return_url is required by ABA PayWay to deliver webhook callbacks
-        $params = [
-            'req_time'             => $reqTime,
-            'merchant_id'          => $merchantId,
-            'tran_id'              => $tranId,
-            'amount'               => $amount,
-            'payment_option'       => 'abapay_khqr',
-            'return_url'           => $returnUrl,
-            'continue_success_url' => $returnUrl,
-            'cancel_url'           => $returnUrl,
-            'first_name'           => $firstName,
-            'last_name'            => $lastName,
-            'email'                => $user->email,
-            'phone'                => $phone,
+        // ── Core fields that go into the HMAC hash ───────────────────────────
+        // ABA PayWay only hashes these specific fields (NOT return_url / cancel_url)
+        $hashParams = [
+            'req_time'       => $reqTime,
+            'merchant_id'    => $merchantId,
+            'tran_id'        => $tranId,
+            'amount'         => $amount,
+            'payment_option' => 'abapay_khqr',
+            'first_name'     => $firstName,
+            'last_name'      => $lastName,
+            'email'          => $user->email,
+            'phone'          => $phone,
         ];
 
-        // 1. Sort fields by key ascending (required by ABA PayWay hash algorithm)
-        ksort($params);
+        // 1. Sort hash fields by key ascending
+        ksort($hashParams);
 
         // 2. Concatenate all values (no separators)
-        $b4hash = implode('', array_map('strval', array_values($params)));
+        $b4hash = implode('', array_map('strval', array_values($hashParams)));
 
         // 3. Generate HMAC-SHA512 signature
         $hash = base64_encode(hash_hmac('sha512', $b4hash, $apiKey, true));
-        $params['hash'] = $hash;
+
+        // ── Full POST body = hash fields + URL fields + hash ─────────────────
+        $params = array_merge($hashParams, [
+            'return_url'           => $returnUrl,
+            'continue_success_url' => $returnUrl,
+            'cancel_url'           => $returnUrl,
+            'hash'                 => $hash,
+        ]);
 
         Log::info('ABA PayWay QR request', [
-            'url'         => "{$baseUrl}/api/payment-gateway/v1/payments/purchase",
-            'merchant_id' => $merchantId,
-            'tran_id'     => $tranId,
-            'amount'      => $amount,
-            'return_url'  => $returnUrl,
-            'b4hash'      => $b4hash,
+            'url'        => "{$baseUrl}/api/payment-gateway/v1/payments/purchase",
+            'tran_id'    => $tranId,
+            'amount'     => $amount,
+            'return_url' => $returnUrl,
+            'b4hash'     => $b4hash,
+            'hash'       => $hash,
         ]);
+
 
         try {
             // 4. POST to ABA PayWay purchase endpoint as form data (required — ABA does NOT accept JSON)
