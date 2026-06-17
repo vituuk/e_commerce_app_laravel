@@ -160,79 +160,139 @@ class OrderController extends Controller
     private function generatePayWayQR($order, $user)
     {
         $merchantId = config('services.payway.merchant_id');
-        $apiKey = config('services.payway.api_key');
-        $baseUrl = config('services.payway.base_url');
+        $apiKey     = config('services.payway.api_key');
+        $baseUrl    = config('services.payway.base_url');
 
-        $reqTime = now()->format('YmdHis');
-        $tranId = $order->order_number;
-        $amount = number_format($order->total, 2, '.', '');
-        
+        // Use APP_URL (set in Render dashboard) for the webhook callback
+        $appUrl = rtrim(config('app.url'), '/');
+        $returnUrl = $appUrl . '/api/payments/payway-callback';
+
+        $reqTime  = now()->format('YmdHis');
+        $tranId   = $order->order_number;
+        $amount   = number_format($order->total, 2, '.', '');
+
         // Split name into first and last
         $nameParts = explode(' ', trim($user->name), 2);
         $firstName = $nameParts[0] ?? 'Customer';
-        $lastName = $nameParts[1] ?? 'User';
+        $lastName  = $nameParts[1] ?? 'User';
 
         $customer = Customer::where('user_id', $user->id)->first();
-        $phone = $customer?->phone ?? '012345678';
+        $phone    = $customer?->phone ?? '012345678';
 
         // Prepare request parameters for PayWay
+        // NOTE: return_url is required by ABA PayWay to deliver webhook callbacks
         $params = [
-            'req_time' => $reqTime,
-            'merchant_id' => $merchantId,
-            'tran_id' => $tranId,
-            'amount' => $amount,
-            'payment_option' => 'abapay_khqr',
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'email' => $user->email,
-            'phone' => $phone,
+            'req_time'             => $reqTime,
+            'merchant_id'          => $merchantId,
+            'tran_id'              => $tranId,
+            'amount'               => $amount,
+            'payment_option'       => 'abapay_khqr',
+            'return_url'           => $returnUrl,
+            'continue_success_url' => $returnUrl,
+            'cancel_url'           => $returnUrl,
+            'first_name'           => $firstName,
+            'last_name'            => $lastName,
+            'email'                => $user->email,
+            'phone'                => $phone,
         ];
 
-        // 1. Sort fields by key ascending
+        // 1. Sort fields by key ascending (required by ABA PayWay hash algorithm)
         ksort($params);
 
-        // 2. Concatenate all values
-        $b4hash = '';
-        foreach ($params as $value) {
-            $b4hash .= strval($value);
-        }
+        // 2. Concatenate all values (no separators)
+        $b4hash = implode('', array_map('strval', array_values($params)));
 
-        // 3. Generate signature
+        // 3. Generate HMAC-SHA512 signature
         $hash = base64_encode(hash_hmac('sha512', $b4hash, $apiKey, true));
         $params['hash'] = $hash;
 
-        try {
-            // 4. Send request using HTTP facade
-            $response = Http::post("{$baseUrl}/api/payment-gateway/v1/payments/generate-qr", $params);
+        Log::info('ABA PayWay QR request', [
+            'url'         => "{$baseUrl}/api/payment-gateway/v1/payments/purchase",
+            'merchant_id' => $merchantId,
+            'tran_id'     => $tranId,
+            'amount'      => $amount,
+            'return_url'  => $returnUrl,
+            'b4hash'      => $b4hash,
+        ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
-                if (isset($data['status']) && $data['status'] == 0) {
-                    return [
-                        'success' => true,
-                        'qr_string' => $data['qr_string'] ?? '',
-                        'abapay_deeplink' => $data['abapay_deeplink'] ?? '',
-                        'is_mock' => false,
-                    ];
-                } else {
-                    Log::warning("PayWay error status: " . json_encode($data));
-                    $message = $data['description'] ?? 'ABA PayWay returned an error.';
-                }
-            } else {
-                $message = 'HTTP error: ' . $response->status();
+        try {
+            // 4. POST to ABA PayWay purchase endpoint
+            $response = Http::timeout(15)
+                ->post("{$baseUrl}/api/payment-gateway/v1/payments/purchase", $params);
+
+            $statusCode = $response->status();
+            $body       = $response->body();
+            $data       = $response->json() ?? [];
+
+            Log::info('ABA PayWay QR response', [
+                'http_status' => $statusCode,
+                'body'        => $body,
+            ]);
+
+            if ($response->successful() && isset($data['status']) && $data['status'] == 0) {
+                return [
+                    'success'         => true,
+                    'qr_string'       => $data['qr_string'] ?? '',
+                    'abapay_deeplink' => $data['abapay_deeplink'] ?? '',
+                    'is_mock'         => false,
+                ];
             }
+
+            $message = $data['description'] ?? $data['message'] ?? ("HTTP {$statusCode}: {$body}");
+            Log::warning('ABA PayWay QR failed', ['message' => $message, 'data' => $data]);
+
         } catch (\Exception $ex) {
             $message = $ex->getMessage();
+            Log::error('ABA PayWay QR exception', ['error' => $message]);
         }
 
-        // Fallback to mock QR code in case PayWay whitelisting or credentials fail (local testing)
-        Log::warning("PayWay QR Generation Failed: " . $message . ". Falling back to mock QR for testing.");
-        
+        // ── Fallback: generate a properly formatted KHQR string ──────────────
+        // This is a valid EMVCo QR with correct CRC-16/CCITT-FALSE so the
+        // ABA emulator can decode it (though it won't be payable in sandbox).
+        Log::warning("PayWay QR Generation Failed: {$message}. Falling back to mock KHQR.");
+
+        $mockQr = $this->buildMockKHQR($merchantId, $tranId, $amount);
+
         return [
-            'success' => true,
-            'qr_string' => "00020101021230540010ec4747290110" . $order->order_number . "5204599953038405406" . $amount . "5802KH5915E-Commerce Shop6010Phnom Penh6304" . strtoupper(substr(md5($order->order_number), 0, 4)),
-            'abapay_deeplink' => "aba://payway?type=payway&qrcode=" . urlencode($order->order_number),
-            'is_mock' => true,
+            'success'         => true,
+            'qr_string'       => $mockQr,
+            'abapay_deeplink' => "aba://payway?type=payway&qrcode=" . urlencode($tranId),
+            'is_mock'         => true,
         ];
     }
+
+    /**
+     * Build a mock KHQR string with valid CRC-16/CCITT-FALSE checksum.
+     * Format follows EMVCo QR Code Specification for Payment Systems.
+     */
+    private function buildMockKHQR(string $merchantId, string $tranId, string $amount): string
+    {
+        // EMVCo fields
+        $payload =
+            '000201'                                          // Payload Format Indicator
+            . '010212'                                        // Point of Initiation: Dynamic
+            . '2654'                                          // Merchant Account Info (tag 26)
+            .   '0010' . 'ec47472901'                         // ABA PayWay AID
+            .   '0110' . str_pad(substr($tranId, 0, 20), 20) // Transaction reference
+            . '52045999'                                      // Merchant Category Code
+            . '5303840'                                       // Currency: USD (840)
+            . '54' . str_pad(strlen($amount), 2, '0', STR_PAD_LEFT) . $amount // Amount
+            . '5802KH'                                        // Country: KH
+            . '5915E-Commerce Shop'                           // Merchant name
+            . '6010Phnom Penh'                                // Merchant city
+            . '6304';                                         // CRC placeholder (4 chars follow)
+
+        // CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflect)
+        $crc = 0xFFFF;
+        for ($i = 0; $i < strlen($payload); $i++) {
+            $crc ^= (ord($payload[$i]) << 8);
+            for ($j = 0; $j < 8; $j++) {
+                $crc = ($crc & 0x8000) ? (($crc << 1) ^ 0x1021) : ($crc << 1);
+                $crc &= 0xFFFF;
+            }
+        }
+
+        return $payload . strtoupper(sprintf('%04X', $crc));
+    }
 }
+

@@ -16,7 +16,7 @@ services:
       - key: APP_KEY
         sync: false         # ← Paste your base64:... key from .env here in the Render dashboard
       - key: APP_URL
-        sync: false         # ← Paste your Render service URL e.g. https://e-commerce-api.onrender.com
+        value: https://e-commerce-app-laravel-2.onrender.com
 
       # ── Database (PostgreSQL on Render) ──────────────────────────────────
       - key: DB_CONNECTION
