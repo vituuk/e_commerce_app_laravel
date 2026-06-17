@@ -41,4 +41,11 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URL'),
     ],
 
+    'payway' => [
+        'merchant_id' => env('ABA_PAYWAY_MERCHANT_ID'),
+        'api_key' => env('ABA_PAYWAY_API_KEY'),
+        'base_url' => env('ABA_PAYWAY_BASE_URL', 'https://checkout-sandbox.payway.com.kh'),
+        'merchant_email' => env('ABA_PAYWAY_MERCHANT_EMAIL'),
+    ],
+
 ];

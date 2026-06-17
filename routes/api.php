@@ -94,6 +94,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/payments/payway-callback', [\App\Http\Controllers\Api\PaymentCallbackController::class, 'paywayCallback']);
 
 // ─── Google Auth ─────────────────────────────────────────
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
