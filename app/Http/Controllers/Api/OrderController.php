@@ -181,15 +181,17 @@ class OrderController extends Controller
         $phone    = $customer?->phone ?? '012345678';
 
         // ── Core fields that go into the HMAC hash ───────────────────────────
-        // ABA PayWay only hashes these specific fields (NOT return_url / cancel_url)
+        // ABA PayWay v3 uses 'firstname'/'lastname' (NO underscores).
+        // All fields sent in the request (including return_url) are included in the hash.
         $hashParams = [
             'req_time'       => $reqTime,
             'merchant_id'    => $merchantId,
             'tran_id'        => $tranId,
             'amount'         => $amount,
             'payment_option' => 'abapay_khqr',
-            'first_name'     => $firstName,
-            'last_name'      => $lastName,
+            'return_url'     => $returnUrl,
+            'firstname'      => $firstName,
+            'lastname'       => $lastName,
             'email'          => $user->email,
             'phone'          => $phone,
         ];
@@ -203,12 +205,9 @@ class OrderController extends Controller
         // 3. Generate HMAC-SHA512 signature
         $hash = base64_encode(hash_hmac('sha512', $b4hash, $apiKey, true));
 
-        // ── Full POST body = hash fields + URL fields + hash ─────────────────
+        // ── Full POST body = hash fields + hash ───────────────────────────────
         $params = array_merge($hashParams, [
-            'return_url'           => $returnUrl,
-            'continue_success_url' => $returnUrl,
-            'cancel_url'           => $returnUrl,
-            'hash'                 => $hash,
+            'hash' => $hash,
         ]);
 
         Log::info('ABA PayWay QR request', [
@@ -236,17 +235,29 @@ class OrderController extends Controller
                 'body'        => $body,
             ]);
 
-            if ($response->successful() && isset($data['status']) && $data['status'] == 0) {
+            // ABA PayWay v3 returns: {"status":{"code":0,"message":"success"},"qr_string":"..."}
+            // v1/v2 returns flat: {"status":0,"qr_string":"..."}
+            $statusObj  = $data['status'] ?? null;
+            $statusCode2 = is_array($statusObj) ? ($statusObj['code'] ?? -1) : ($statusObj ?? -1);
+            $qrString   = $data['qr_string'] ?? $data['data']['qr_string'] ?? '';
+
+            Log::info('ABA PayWay parsed status', ['status_code' => $statusCode2, 'qr_string_len' => strlen($qrString)]);
+
+            if ($statusCode2 == 0 && $qrString !== '') {
                 return [
                     'success'         => true,
-                    'qr_string'       => $data['qr_string'] ?? '',
-                    'abapay_deeplink' => $data['abapay_deeplink'] ?? '',
+                    'qr_string'       => $qrString,
+                    'abapay_deeplink' => $data['abapay_deeplink'] ?? $data['data']['abapay_deeplink'] ?? '',
                     'is_mock'         => false,
                 ];
             }
 
-            $message = $data['description'] ?? $data['message'] ?? ("HTTP {$statusCode}: {$body}");
+            $message = (is_array($statusObj) ? ($statusObj['message'] ?? null) : null)
+                ?? $data['description']
+                ?? $data['message']
+                ?? "HTTP {$statusCode}: {$body}";
             Log::warning('ABA PayWay QR failed', ['message' => $message, 'data' => $data]);
+
 
         } catch (\Exception $ex) {
             $message = $ex->getMessage();

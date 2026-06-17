@@ -58,8 +58,9 @@ Route::get('/diagnose-payway', function () {
         'tran_id'        => $tranId,
         'amount'         => $amount,
         'payment_option' => 'abapay_khqr',
-        'first_name'     => 'Test',
-        'last_name'      => 'User',
+        'return_url'     => $appUrl . '/api/payments/payway-callback',
+        'firstname'      => 'Test',
+        'lastname'       => 'User',
         'email'          => 'test@test.com',
         'phone'          => '012345678',
     ];
@@ -68,8 +69,7 @@ Route::get('/diagnose-payway', function () {
     $hash   = base64_encode(hash_hmac('sha512', $b4hash, $apiKey, true));
 
     $params = array_merge($hashParams, [
-        'return_url' => $appUrl . '/api/payments/payway-callback',
-        'hash'       => $hash,
+        'hash' => $hash,
     ]);
 
     try {
