@@ -13,11 +13,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Drop the old check constraint (created by the original enum migration)
-        DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
+        if (DB::getDriverName() === 'pgsql') {
+            // Drop the old check constraint (created by the original enum migration)
+            DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
 
-        // Add a new check constraint that includes khqr
-        DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check CHECK (payment_method IN ('credit_card', 'paypal', 'google_pay', 'khqr'))");
+            // Add a new check constraint that includes khqr
+            DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check CHECK (payment_method IN ('credit_card', 'paypal', 'google_pay', 'khqr'))");
+        }
     }
 
     /**
@@ -25,8 +27,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check');
 
-        DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check CHECK (payment_method IN ('credit_card', 'paypal', 'google_pay'))");
+            DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check CHECK (payment_method IN ('credit_card', 'paypal', 'google_pay'))");
+        }
     }
 };
