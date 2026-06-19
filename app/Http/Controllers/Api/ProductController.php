@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use App\imageCloud\imageCloud;
 
 class ProductController extends Controller
 {
@@ -223,19 +223,9 @@ class ProductController extends Controller
             if ($image instanceof \Illuminate\Http\UploadedFile) {
                 try {
                     if ($uploadDriver === 'cloudinary') {
-                        $filePath = $image->getRealPath();
-                        $options = [
-                            'folder' => 'e-commerce-products',
-                            'use_filename' => true,
-                            'unique_filename' => true,
-                        ];
-
-                        if (method_exists(Cloudinary::class, 'uploadApi')) {
-                            $result = Cloudinary::uploadApi()->upload($filePath, $options);
-                            $url = $result['secure_url'];
-                        } else {
-                            $response = Cloudinary::upload($filePath, $options);
-                            $url = $response->getSecurePath();
+                        $url = imageCloud::upload($image);
+                        if (!$url) {
+                            throw new \RuntimeException('Cloudinary upload returned null.');
                         }
                         $uploadedImages[] = $url;
                     } else {
@@ -261,30 +251,15 @@ class ProductController extends Controller
                 // If it is a valid external URL, download and upload/store it
                 if (filter_var($image, FILTER_VALIDATE_URL)) {
                     try {
-                        $response = Http::get($image);
-                        if ($response->successful()) {
-                            if ($uploadDriver === 'cloudinary') {
-                                $tempFile = tempnam(sys_get_temp_dir(), 'img');
-                                file_put_contents($tempFile, $response->body());
-
-                                $options = [
-                                    'folder' => 'e-commerce-products',
-                                    'use_filename' => true,
-                                    'unique_filename' => true,
-                                ];
-
-                                if (method_exists(Cloudinary::class, 'uploadApi')) {
-                                    $result = Cloudinary::uploadApi()->upload($tempFile, $options);
-                                    $url = $result['secure_url'];
-                                } else {
-                                    $result = Cloudinary::upload($tempFile, $options);
-                                    $url = $result->getSecurePath();
-                                }
-
-                                unlink($tempFile);
+                        if ($uploadDriver === 'cloudinary') {
+                            $url = imageCloud::uploadFromUrl($image);
+                            if ($url) {
                                 $uploadedImages[] = $url;
                                 continue;
-                            } else {
+                            }
+                        } else {
+                            $response = Http::get($image);
+                            if ($response->successful()) {
                                 // Local storage for external URL
                                 $extension = pathinfo(parse_url($image, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
                                 $filename = Str::random(40) . '.' . $extension;
